@@ -18,6 +18,18 @@
       <Type>Test</Type>
       <TargetFramework>net10.0</TargetFramework>
     </Project>
+    <Project>
+      <Name>TcpServer</Name>
+      <Path>Service/TcpServer/TcpServer.csproj</Path>
+      <Type>Library</Type>
+      <TargetFramework>net10.0</TargetFramework>
+    </Project>
+    <Project>
+      <Name>App</Name>
+      <Path>Service/App/App.csproj</Path>
+      <Type>Executable</Type>
+      <TargetFramework>net10.0</TargetFramework>
+    </Project>
   </Projects>
   <Configurations>
     <Configuration>Debug</Configuration>
