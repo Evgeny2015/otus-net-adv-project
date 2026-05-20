@@ -1,0 +1,26 @@
+<Solution>
+  <Projects>
+    <Project>
+      <Name>DataStore</Name>
+      <Path>Service/DataStore/DataStore.csproj</Path>
+      <Type>Library</Type>
+      <TargetFramework>net10.0</TargetFramework>
+    </Project>
+    <Project>
+      <Name>CommandParser</Name>
+      <Path>Service/CommandParser/CommandParser.csproj</Path>
+      <Type>Library</Type>
+      <TargetFramework>net10.0</TargetFramework>
+    </Project>
+    <Project>
+      <Name>TestServices</Name>
+      <Path>Service/TestServices/TestServices.csproj</Path>
+      <Type>Test</Type>
+      <TargetFramework>net10.0</TargetFramework>
+    </Project>
+  </Projects>
+  <Configurations>
+    <Configuration>Debug</Configuration>
+    <Configuration>Release</Configuration>
+  </Configurations>
+</Solution>
