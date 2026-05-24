@@ -24,14 +24,14 @@ public class DataStoreTests
     public void Set_NullKey_ThrowsArgumentException()
     {
         var store = new DataStore.DataStore();
-        Assert.Throws<ArgumentException>(() => store.Set(null, new byte[0]));
+        Assert.Throws<ArgumentException>(() => store.Set(null!, new byte[0]));
     }
 
     [Fact]
     public void Set_NullValue_ThrowsArgumentNullException()
     {
         var store = new DataStore.DataStore();
-        Assert.Throws<ArgumentNullException>(() => store.Set("key", null));
+        Assert.Throws<ArgumentNullException>(() => store.Set("key", (byte[])null));
     }
 
     [Fact]

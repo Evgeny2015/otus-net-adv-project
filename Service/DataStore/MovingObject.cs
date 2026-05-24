@@ -1,9 +1,12 @@
+using SourceGenerator;
+
 namespace DataStore;
 
 /// <summary>
 /// Represents a real-time moving object with geospatial and motion attributes.
 /// </summary>
-public class MovingObject
+[GenerateBinarySerializer]
+public partial class MovingObject
 {
     /// <summary>
     /// Geographic coordinates (longitude, latitude)

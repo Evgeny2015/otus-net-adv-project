@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 
 namespace DataStore;
@@ -32,6 +33,36 @@ public class DataStore : IDisposable
         try
         {
             _storage[key] = value;
+        }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
+        Interlocked.Increment(ref _setCount);
+    }
+
+    /// <summary>
+    /// Stores a MovingObject with the specified key using generated binary serialization.
+    /// If the key already exists, the value is overwritten.
+    /// </summary>
+    /// <param name="key">The key to store the value under</param>
+    /// <param name="value">The MovingObject to store</param>
+    public void Set(string key, MovingObject value)
+    {
+        if (string.IsNullOrEmpty(key))
+            throw new ArgumentException("Key cannot be null or empty", nameof(key));
+
+        if (value == null)
+            throw new ArgumentNullException(nameof(value), "Value cannot be null");
+
+        using var memoryStream = new MemoryStream();
+        value.SerializeToBinary(memoryStream);
+        var bytes = memoryStream.ToArray();
+
+        _lock.EnterWriteLock();
+        try
+        {
+            _storage[key] = bytes;
         }
         finally
         {
