@@ -11,4 +11,8 @@
     <ProjectReference Include="..\DataStore\DataStore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry" Version="1.15.3" />
+  </ItemGroup>
+
 </Project>

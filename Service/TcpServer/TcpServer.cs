@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.Sockets;
 using CommandParser;
 using DataStore;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using OpenTelemetry;
 
 namespace TcpServer;
 
@@ -14,13 +17,23 @@ public class TcpServer
     private readonly DataStore.DataStore _dataStore;
     private readonly SemaphoreSlim _connectionSemaphore;
     private const int MaxMessageSize = 4096; // 4KB limit
+    private readonly ActivitySource _activitySource;
+    private readonly Meter _meter;
+    private readonly Counter<long> _commandCounter;
+    private readonly Histogram<double> _commandDurationHistogram;
 
-    public TcpServer(IPAddress ipAddress, int port, DataStore.DataStore? dataStore = null, int maxConcurrentConnections = 100)
+    public TcpServer(IPAddress ipAddress, int port, DataStore.DataStore? dataStore = null, int maxConcurrentConnections = 100, ActivitySource? activitySource = null, Meter? meter = null)
     {
         _ipAddress = ipAddress;
         _port = port;
         _dataStore = dataStore ?? new DataStore.DataStore();
         _connectionSemaphore = new SemaphoreSlim(maxConcurrentConnections, maxConcurrentConnections);
+        _activitySource = activitySource ?? new ActivitySource("GeospatialDataStore.Server");
+        _meter = meter ?? new Meter("GeospatialDataStore.Server");
+
+        // Create metric instruments
+        _commandCounter = _meter.CreateCounter<long>("commands.processed", unit: "commands", description: "Number of processed commands");
+        _commandDurationHistogram = _meter.CreateHistogram<double>("command.duration", unit: "ms", description: "Duration of command processing in milliseconds");
     }
 
     public TcpServer() : this(IPAddress.Loopback, 8080, null)
@@ -158,8 +171,26 @@ public class TcpServer
             string key = parsedCommand.Key.ToString();
             string value = parsedCommand.Value.ToString();
 
+            // Create Activity for command processing
+            using var activity = _activitySource.StartActivity("ProcessCommand", ActivityKind.Internal);
+            activity?.SetTag("command.name", command);
+            activity?.SetTag("command.key", key);
+            activity?.SetTag("client.info", clientInfo);
+
+            // Start measuring execution time
+            var stopwatch = Stopwatch.StartNew();
+
             // Handle command
             string response = await HandleCommandAsync(command, key, value);
+
+            // Stop measuring
+            stopwatch.Stop();
+
+            // Increment command counter
+            _commandCounter.Add(1, new KeyValuePair<string, object?>("command", command));
+
+            // Record duration in histogram
+            _commandDurationHistogram.Record(stopwatch.ElapsedMilliseconds, new KeyValuePair<string, object?>("command", command));
 
             // Send response back to client
             await SendResponseAsync(clientSocket, response);
