@@ -12,12 +12,15 @@ public class TcpServer
     private readonly int _port;
     private Socket? _serverSocket;
     private readonly DataStore.DataStore _dataStore;
+    private readonly SemaphoreSlim _connectionSemaphore;
+    private const int MaxMessageSize = 4096; // 4KB limit
 
-    public TcpServer(IPAddress ipAddress, int port, DataStore.DataStore? dataStore = null)
+    public TcpServer(IPAddress ipAddress, int port, DataStore.DataStore? dataStore = null, int maxConcurrentConnections = 100)
     {
         _ipAddress = ipAddress;
         _port = port;
         _dataStore = dataStore ?? new DataStore.DataStore();
+        _connectionSemaphore = new SemaphoreSlim(maxConcurrentConnections, maxConcurrentConnections);
     }
 
     public TcpServer() : this(IPAddress.Loopback, 8080, null)
@@ -44,6 +47,9 @@ public class TcpServer
             {
                 var clientSocket = await _serverSocket.AcceptAsync(cancellationToken);
                 Console.WriteLine($"New client connected: {clientSocket.RemoteEndPoint}");
+
+                // Wait for semaphore before processing client
+                await _connectionSemaphore.WaitAsync(cancellationToken);
 
                 // Start processing client in background task
                 _ = ProcessClientAsync(clientSocket, cancellationToken);
@@ -86,6 +92,13 @@ public class TcpServer
                             break;
                         }
 
+                        // Check for memory exhaustion: if message exceeds 4KB limit
+                        if (receiveResult > MaxMessageSize)
+                        {
+                            Console.WriteLine($"Client {clientSocket.RemoteEndPoint} sent {receiveResult} bytes, exceeding {MaxMessageSize} limit. Disconnecting.");
+                            break; // Will close socket and release semaphore
+                        }
+
                         // Process received data
                         var data = new ReadOnlyMemory<byte>(buffer, 0, receiveResult);
                         await ProcessReceivedDataAsync(clientSocket, data, clientSocket.RemoteEndPoint?.ToString() ?? "unknown");
@@ -121,6 +134,9 @@ public class TcpServer
             {
                 // Ignore errors during cleanup
             }
+
+            // Release the connection semaphore
+            _connectionSemaphore.Release();
         }
     }
 
