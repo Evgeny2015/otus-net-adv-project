@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using CommandParser;
+using DataStore;
 
 namespace TcpServer;
 
@@ -10,14 +11,16 @@ public class TcpServer
     private readonly IPAddress _ipAddress;
     private readonly int _port;
     private Socket? _serverSocket;
+    private readonly DataStore.DataStore _dataStore;
 
-    public TcpServer(IPAddress ipAddress, int port)
+    public TcpServer(IPAddress ipAddress, int port, DataStore.DataStore? dataStore = null)
     {
         _ipAddress = ipAddress;
         _port = port;
+        _dataStore = dataStore ?? new DataStore.DataStore();
     }
 
-    public TcpServer() : this(IPAddress.Loopback, 8080)
+    public TcpServer() : this(IPAddress.Loopback, 8080, null)
     {
     }
 
@@ -85,7 +88,7 @@ public class TcpServer
 
                         // Process received data
                         var data = new ReadOnlyMemory<byte>(buffer, 0, receiveResult);
-                        await ProcessReceivedDataAsync(data, clientSocket.RemoteEndPoint?.ToString() ?? "unknown");
+                        await ProcessReceivedDataAsync(clientSocket, data, clientSocket.RemoteEndPoint?.ToString() ?? "unknown");
                     }
                 }
                 finally
@@ -121,7 +124,7 @@ public class TcpServer
         }
     }
 
-    private async Task ProcessReceivedDataAsync(ReadOnlyMemory<byte> data, string clientInfo)
+    private async Task ProcessReceivedDataAsync(Socket clientSocket, ReadOnlyMemory<byte> data, string clientInfo)
     {
         try
         {
@@ -133,13 +136,98 @@ public class TcpServer
 
             // Output parsed command to console
             Console.WriteLine($"[{clientInfo}] Command: '{parsedCommand.Command}', Key: '{parsedCommand.Key}', Value: '{parsedCommand.Value}'");
+
+            // Convert to strings before async call
+            string command = parsedCommand.Command.ToString();
+            string key = parsedCommand.Key.ToString();
+            string value = parsedCommand.Value.ToString();
+
+            // Handle command
+            string response = await HandleCommandAsync(command, key, value);
+
+            // Send response back to client
+            await SendResponseAsync(clientSocket, response);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error processing data from {clientInfo}: {ex.Message}");
+            await SendResponseAsync(clientSocket, $"ERROR: {ex.Message}");
+        }
+    }
+
+    private async Task<string> HandleCommandAsync(string command, string key, string value)
+    {
+        if (string.IsNullOrEmpty(command))
+        {
+            return "ERROR: Empty command";
         }
 
-        await Task.CompletedTask;
+        switch (command.ToUpperInvariant())
+        {
+            case "SET":
+                if (string.IsNullOrEmpty(key))
+                    return "ERROR: SET requires a key";
+                if (string.IsNullOrEmpty(value))
+                    return "ERROR: SET requires a value";
+
+                // Store as byte array (UTF-8 encoded string)
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(value);
+                _dataStore.Set(key, bytes);
+                return $"OK: Stored '{key}' = '{value}'";
+
+            case "GET":
+                if (string.IsNullOrEmpty(key))
+                    return "ERROR: GET requires a key";
+
+                byte[]? result = _dataStore.Get(key);
+                if (result == null)
+                    return $"ERROR: Key '{key}' not found";
+
+                string stringValue = System.Text.Encoding.UTF8.GetString(result);
+                return $"OK: '{key}' = '{stringValue}'";
+
+            case "DELETE":
+                if (string.IsNullOrEmpty(key))
+                    return "ERROR: DELETE requires a key";
+
+                bool deleted = _dataStore.Delete(key);
+                return deleted ? $"OK: Deleted '{key}'" : $"ERROR: Key '{key}' not found";
+
+            case "CONTAINS":
+                if (string.IsNullOrEmpty(key))
+                    return "ERROR: CONTAINS requires a key";
+
+                bool contains = _dataStore.Contains(key);
+                return contains ? $"OK: Key '{key}' exists" : $"OK: Key '{key}' does not exist";
+
+            case "COUNT":
+                int count = _dataStore.Count;
+                return $"OK: {count} items";
+
+            case "CLEAR":
+                _dataStore.Clear();
+                return "OK: Store cleared";
+
+            case "STATS":
+                var stats = _dataStore.GetStatistics();
+                return $"OK: SET={stats.setCount}, GET={stats.getCount}, DELETE={stats.deleteCount}";
+
+            default:
+                return $"ERROR: Unknown command '{command}'";
+        }
+    }
+
+    private async Task SendResponseAsync(Socket clientSocket, string response)
+    {
+        try
+        {
+            byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response + "\n");
+            await clientSocket.SendAsync(responseBytes, SocketFlags.None);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending response to {clientSocket.RemoteEndPoint}: {ex.Message}");
+        }
     }
 
     public void Stop()
