@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CommandParser\CommandParser.csproj" />
     <ProjectReference Include="..\DataStore\DataStore.csproj" />
+    <ProjectReference Include="..\TcpServer\TcpServer.csproj" />
   </ItemGroup>
 
 </Project>
